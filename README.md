@@ -107,3 +107,87 @@ and replace the contents of `main`:
 and give it a run. And you get this awesomeness:
 ![A window with a paddle, oh my](images/screenshot1.png)
 Yay, we did that!
+# Resources
+That grey background doesn't do it for me, so let's fix that now by inserting a resource to make it clear:
+
+```rust
+    App::build()
+        .add_plugins(DefaultPlugins)
+        .insert_resource(ClearColor(Color::rgb(0.9, 0.9, 0.9)))
+        .add_startup_system(setup.system())
+        .run();
+```
+`ClearColor` is a resource provided by Bevy, which is magically handled to turn off that hideous grey. Now, we want to tag each of our components so we can tell what they are later, and to do this, we'll create an `enum` which tells us the type of object it is:
+
+```rust
+enum Collider {
+    Solid,
+    Scorable,
+    Paddle,
+}
+```
+So walls will be solid, scoreable will be the blocks we're going to smash and the paddle is... the paddle. Let's add this tag to our bundle we just spawned, along with the Paddle struct we created earlier
+
+```rust
+[...]
+
+    commands.spawn_bundle(SpriteBundle {
+        material: materials.add(Color::rgb(0.5, 0.5, 1.0).into()),
+        transform: Transform::from_xyz(0.0, -215.0, 0.0),
+        sprite: Sprite::new(Vec2::new(120.0, 30.0)),
+        ..Default::default()
+    })
+    .insert(Paddle { speed: 500.0 })
+    .insert(Collider::Paddle)
+    ;
+```
+# It's alive!
+Now it's time to make it so we can move it around, and which do you use to do do-ey things? Systems! This is another system besides the setup one, so it will be another function which takes 3 arguments:
+
+```rust
+fn paddle_movement_system(
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(&Paddle, &mut Transform)>,
+)
+{
+
+}
+```
+We need to know how long it's been since the last pass (`Res<Time>`), the inputs on the keyboard (`Res<Input<KeyCode>>`) and we want the `Paddle`, along with it's `Transform`, which is given as part of the [`SpriteBundle`](https://docs.rs/bevy/0.5.0/bevy/prelude/struct.SpriteBundle.html) that we used. 
+
+```rust
+fn paddle_movement_system(
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(&Paddle, &mut Transform)>,
+)
+{
+    if let Ok((paddle, mut transform)) = query.single_mut() {
+        let mut direction = 0.0;
+        if keyboard_input.pressed(KeyCode::Left) {
+            direction -= 1.0;
+        }
+
+        if keyboard_input.pressed(KeyCode::Right) {
+            direction += 1.0;
+        }
+
+        let translation = &mut transform.translation;
+        // move the paddle horizontally
+        translation.x += time.delta_seconds() * direction * paddle.speed;
+        // bound the paddle within the walls
+        translation.x = translation.x.min(380.0).max(-380.0);
+    }
+}
+```
+and add it as a system. We previously used `add_startup_system` which only runs once, whereas this one we want polling all the time via `add_system`:
+```rust
+fn main() {
+[...]
+    .add_startup_system(setup.system())
+    .add_system(paddle_movement_system.system())
+    .run();
+}
+```
+Give it a bash now - and it moves! It's alive!!
