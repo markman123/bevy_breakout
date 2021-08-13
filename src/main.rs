@@ -6,6 +6,7 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.9, 0.9, 0.9)))
         .add_startup_system(setup.system())
         .add_system(paddle_movement_system.system())
+        .add_system(ball_movement_system.system())
         .run();
 }
 
@@ -46,6 +47,16 @@ fn setup(
         })
         .insert(Paddle { speed: 500.0 })
         .insert(Collider::Paddle);
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(Color::rgb(1.0, 0.5, 0.5).into()),
+            transform: Transform::from_xyz(0.0, -50.0, 1.0),
+            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+            ..Default::default()
+        })
+        .insert(Ball {
+            velocity: 400.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
+        });
 }
 
 fn paddle_movement_system(
@@ -68,5 +79,14 @@ fn paddle_movement_system(
         translation.x += time.delta_seconds() * direction * paddle.speed;
         // bound the paddle within the walls
         translation.x = translation.x.min(380.0).max(-380.0);
+    }
+}
+
+fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
+    // clamp the timestep to stop the ball from escaping when the game starts
+    let delta_seconds = f32::min(0.2, time.delta_seconds());
+
+    if let Ok((ball, mut transform)) = ball_query.single_mut() {
+        transform.translation += ball.velocity * delta_seconds;
     }
 }

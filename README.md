@@ -181,7 +181,27 @@ fn paddle_movement_system(
     }
 }
 ```
-and add it as a system. We previously used `add_startup_system` which only runs once, whereas this one we want polling all the time via `add_system`:
+Here, we take a `single_mut()` of the query, as we know there is only one paddle, and we want it to be mutable. After initialising the direction, we check to see if the `KeyCode::Left` or `KeyCode::Right` - the arrow keys - have been pressed, and change the direction accordingly.
+
+## Why do we take a mutable reference?
+We do something interesting to work with the borrow checker, we take a mutable reference to the translation element of the transform struct, for us to mutate. If you tried to change the translation element directly
+```rust
+        // move the paddle horizontally
+        transform.translation.x += time.delta_seconds() * direction * paddle.speed;
+        // bound the paddle within the walls
+        transform.translation.x = translation.x.min(380.0).max(-380.0);
+```
+you'd get this helpful error from the compiler:
+```bash
+error: cannot borrow `transform` as mutable more than once at a time
+first mutable borrow occurs here
+if let Ok((paddle, mut transform)) = query.single_mut(){}
+```
+Couldn't have said it better myself.
+
+Finally, we clamp the value to the interval [-380.0, 380].
+
+Finally, add it as a system. We previously used `add_startup_system` which only runs once, whereas this one we want polling all the time via `add_system`:
 ```rust
 fn main() {
 [...]
@@ -190,4 +210,38 @@ fn main() {
     .run();
 }
 ```
-Give it a bash now - and it moves! It's alive!!
+Give it a bash now - and it moves! It's alive!! You'll notice that there is a gutter - that will be for the walls later.
+
+# Having a ball
+Time to get that ball going. You know the drill. Nothing new here, put this under the paddle:
+
+```rust
+fn setup(
+[...]
+commands
+    .spawn_bundle(SpriteBundle {
+        material: materials.add(Color::rgb(1.0, 0.5, 0.5).into()),
+        transform: Transform::from_xyz(0.0, -50.0, 1.0),
+        sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+        ..Default::default()
+    })
+    .insert(Ball {velocity: 400.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
+    });
+```
+Of course, it doesn't do anything yet. Let's add a system to control it's movement. Same drill, the parameters will be injected by Bevy - `Time` and the `Ball` along with it's `Transform`
+
+```rust
+fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
+    // clamp the timestep to stop the ball from escaping when the game starts
+    let delta_seconds = f32::min(0.2, time.delta_seconds());
+
+    if let Ok((ball, mut transform)) = ball_query.single_mut() {
+        transform.translation += ball.velocity * delta_seconds;
+    }
+}
+```
+If you try and change to using `time.delta_seconds()` without minimising to 0.2, you'll notice you don't have a chance to get the ball.
+
+Same as before, we know there is only one ball, so we'll apply the fraction of the velocity, just like with the paddle. Now we're getting somewhere.
+
+
